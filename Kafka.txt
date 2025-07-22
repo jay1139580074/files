@@ -1,0 +1,159 @@
+Each Thread will get its own space in server  saved in heap, but they shared one same space --stack, so they can communication, the messages are saved as Quere
+
+the message will store in stack, in a que
+
+
+消息中间件
+进程与进程之间消息交互，耦合太高（一发多，多且内容不一or 多且重复且不一） thus need a middle ware process, to handle the message communication
+
+
+JMS  Java Message Service  --  producer provider consumer
+    P2P(point to point)  one message will consume once, each time will get a feedback(so will know the message is consumed)
+    PS(publish & subscrib)  provider will get a topic, different consumer can subscrib one same topic, also producer will get feedback from provider, so will one message is consumed
+
+MQ（Message Queue） So we get one MQ to handle the messages
+    However Kafka is get simple functon of MQ, get more function
+    The message will never lose in Kafka 消息可靠性！
+
+Kafka Broker  
+    The source of that is a Quere in 内存, means once the server restarted, the 内存 will be re-arranged again -  will lead to the data missmatch
+    Thus will save record in file xx.log, it will save the record in offset-- start with 0
+
+C:\DevApp\kafka\bin\windows
+.\zookeeper-server-start.bat ..\..\config\zookeeper.properties
+.\kafka-server-start.bat ..\..\config\server.properties
+.\kafka-console-consumer.bat --topic wikimedia_recentchange --from-beginning --bootstrap-server localhost:9092
+ \kafka-console-consumer.bat --topic myTopic --from-beginning --bootstrap-server DESKTOP-UO2MIIF.mshome.net:9092
+    
+
+docker run -p 3306:3306 --name mysql -e MYSQL_ROOT_PASSWORD=123456 -d mysql:latest
+
+docker run -p 3306:3306 --name mysql --restart=always --privileged=true \
+-v C:/DevApp/mysql/conf:/var/log/musql \
+-v C:/DevApp/mysql/conf:/var/lib/musql \
+-v C:/DevApp/mysql/conf:/etc/musql \
+-v /ect/localtime:/etc/localtime:ro \
+-e MYSQL_ROOT_PASSWORD=123456 -d musql:latest
+
+
+zookeeper with Kafka  选举模式
+First Broker to zookeeper, will be the master, Broker wiill get its own ID, set in the properties
+The rest of the Brokers will listen to the /Controller in zookeeper, incase of the master is down
+
+1. install Broker nodes
+2. moniter Controller node
+3. install Controller node
+4. become the Controller, monitor the changes of all Broker nodes 
+5. inform all Broker, about crusual details (Controller, ids)
+
+Kafka 分配节点 replicas（leader, follower）
+1. Kafka 默认算法分配到各个broker
+2. 自定义， NewTopic(topicName, 自定义map)
+
+生产者：
+    1. data -> intercepter -> serialize -> 分区 -> 数据校验 (max size, buffer memory)
+    2. 数据收集器(缓冲区) buffer（大小达到batch-size 再统一发一次  Topic分类数据）->
+    3. Sender (新线程， Broker节点级别分类数据)
+
+    在途请求缓冲区 -- Sender 发送请求，同时能处理几条 默认5
+
+    If partition not set when send message
+        If a key is provided: Kafka uses a hash of the key to determine the partition. 
+        The hash ensures that messages with the same key are sent to the same partition, maintaining order for those keys.
+
+
+        If no key is provided: Kafka uses a round-robin approach to distribute messages evenly across all available partitions for the topic. 
+        This ensures load balancing across partitions.
+
+    所以涉及到数据异步发送，同步发送
+
+    Kafka 应答级别 ACKS
+    0                       不需要应答
+    1                       只需要Broker(leader)保存数据到文件后应答
+    -1(all)                 需要Broker(leader)应答, 以及所有InSyncR Broker（follower）的应答
+
+    Retry （Producer未收到ACK，所以会重试）  数据重试机制 可能导致数据重复， 导致数据的乱序
+       
+        --使用幂等性 （ID IMPORTANCE = true） 打开配置 -- 只能对同一个分区起作用，使用（ProducerID + data） 顺序号 作为表示实现   
+            要求:    1. ACKS = -1
+                    2. 开启Retry
+                    3. 在途缓冲区Batch = 5
+            ProducerID 不变，幂等性不失效--通过事务实现  TRANCACTION_ID_CONFIG set ID manually,使用事务，保持ProducerId始终一致
+
+数据存储：
+    saved into log file -- can be configured   file name is realted to starting offset
+
+    数据同步一致
+        ISR (In Sync Replicas)  同步数据列表
+
+        High Watermark  高 水位线  -- 消费者能消费消息的最高位置
+            当一条数据同时同步到Leader 和所有Follower 中， 才能被消费  else 数据不一致  /  万一Leader down， 确保新的leader数据也和follower一致）
+
+        LEO （Log End Offset）可以理解为当前Replica有多少条数据   1 row -- LEO = 1
+            Follower 会带着 LEO 去Leader中 fetch 数据, Leader will get the data according to the LEO 偏移量 to get the correct data 
+            Leader FetchResponse to Follower， with HW， Follower will update its own HW accordingly
+
+    数据删除：
+        delete  删除过期数据  基于时间or 数据大小
+
+        compact  压缩数据，相同Key的数据，只保存最后一个Value，有可能数据丢失
+
+Consumer： 
+    LEO = offset +1 = 实际数据条数
+    读取是根据 LEO 读取， ex: LEO=3 (当前有三条数据), then will only read where offset = 3
+
+
+    Offset
+        自动保存：  AUTO_OFFSET_RESET_CONFIG  -- eariliest -- read from min offset
+        手动保存：  AUTO_OFFSET_COMMIT_CONFIG = false   再手动consumer.commitAsync() / consumer.commitSync()
+
+    事务隔离级别： ISOLATION_LEVEL_CONFIG  read_uncommitted -- default  means 有数据就能读取
+
+Consumner Group:
+    Fist consumer added into groupr, is the Leader
+
+    expecting: topic partition count == consumer number  so each consumer will consume realted partition
+
+    One partition can be consumed by ONE consumer only!!
+
+    Group ID --  means the Consumer group's ids
+
+    offset will saved into a Kafka internal topic: _consumer_offsets -- so once one comsumer is down, the new one will know from which offset to start read
+
+    partition 分配策略   PARTITION_ASSIGNMENT_STRATEGY_CONFIG
+        default: RangeAssignor, CooperativeStickAssignor  set in Consumer Leader
+        
+        1. RoundRobinAssignor 轮询分配机制
+            a. sort  member ID -- consumer get a UUID as member ID then sort
+            b. sort partition name
+            c. then assign partition to consumer
+
+        2. RangeAssignor 范围分配机制   尽可能的平均分，顺序向前补齐   Topic多则  效率低
+
+        3. StickyAssignor 粘性分区  尽可能保证原本分区不变
+
+        4. CooperativeStickAssignor 优化后的粘性分区
+
+
+扩展：：-----------------------------
+
+1. 集群脑裂       
+    In zookeeper controller_epoch 节点记录选举纪元，新的默认加一
+
+2. 零拷贝 FileChannel.transferTo  
+    Linux系统 有 Page Cache（读取）， Buffer Cache(写入)， 
+    系统： 内核态
+    程序： 用户态
+
+    一般： 
+        系统读取到 Page Cache --> 程序 I/O --> 系统接收到 Buffer Cache， 再写入到其他网络程序
+
+    Kafka 使用FileChannel.transferTo， 告诉系统:  -------避免系统，再程序，再系统的状态重复切换，效率高
+        系统读取到 Page Cache --> 系统接收到 Buffer Cache， 再写入到其他网络程序 
+
+3. 顺写日志
+    a. Kafka 一般更多的是顺序插入新数据，不涉及修改
+    b. 新家数据一般写在内存当中，内存-- Queue 数组 
+    c. 内存满了批量写入log文件末尾
+
+    追加数据很快,内存数据满了批量直接写入文件末尾，很快，无需查找， 定位，性能高
