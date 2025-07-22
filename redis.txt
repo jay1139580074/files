@@ -44,17 +44,6 @@
             1. AOF 文件 比 RDB 文件大
             2. AOF运行效率低于RDB
 
-----------------------------------------------------------------------------主从复制 Replica----------------------------------------------------------------------------
-    主节点写， 副节点读   一主多从
-    1. 数据一致
-        主节点通过异步线程把数据发送给所有从节点，从节点再更新数据
-
-----------------------------------------------------------------------------哨兵模式----------------------------------------------------------------------------
-自动的故障转移， 一般也会有多个哨兵来保障高可用
-
-    1. 监控
-    2. 通知
-    3. 自动故障转移
 
 ----------------------------------------------------------------------------事务----------------------------------------------------------------------------
 DB:                                 Redis
@@ -83,3 +72,79 @@ commit                              exec
 3. 命令数量需要合理，不然也会占用内存
 
 ----------------------------------------------------------------------------pub/sub----------------------------------------------------------------------------
+
+----------------------------------------------------------------------------主从复制 Replica----------------------------------------------------------------------------
+    读写分离：
+        主节点写， 副节点读   
+    一主多从：
+        配从不配主
+        salve readOnly
+        master - requirepass
+        salve - masterauth
+
+    基本操作：
+        info replication                -- 查看主从节点
+        replicaof masterIP masterPort   -- set int slave server, normally set in redis.conf file
+        slaveof masterIP masterPort     -- slave 切换 master
+        slaveof no one                  -- 成为master
+
+
+    1. 读写分离：
+        主节点写， 副节点读 
+        主节点通过异步线程把数据发送给所有从节点，从节点再更新数据  
+            a. slave created, will send sync request to master
+            b. master get the sync request, will genereate a RDB file, then send RDS file & cache to salve
+            c. salve get the response, then load all data in RAM
+            d. master send heardbeat to slave 10s
+            e. 增量复制: master send newly added data to salve
+            f. 从机down，then restart： 
+                master，salve will save a offset,masterId in backlog, 
+                once slave re-up, Master will only send the data a
+
+        slave will save all data of master, even down for a while
+    2. master write&read, slave readOnly
+    3. master down, slave will always be salve, wait for master
+    4. after master restart, all still same (data, relationship)
+    5. salve server can be the master server of other salves
+    
+    Disadvantage：
+        1. Data from Master to salve, 有延时
+        2. Master down
+            默认salve只会等待
+
+            !!!!!!  -- So need sentinel to set the Master once Master down
+
+----------------------------------------------------------------------------哨兵模式(sentinel----------------------------------------------------------------------------
+自动的故障转移， 一般也会有奇数个(3)哨兵来保障高可用   Sentinel is used when not using Redis Cluster !!!!!!
+
+    1. 主从监控
+
+    2. 消息通知             发送故障转移结果给客户端 
+
+    3. 自动故障转移         主从切换 根据投票数选出master
+        SDown主观下线        -- 单个Sentinel发现master down（发送PING心跳，单位时间Master内无回复--时间set inconfig）
+        ODown客观下线        -- 多个sentinel发现master down
+        Raft算法（先到先得） 选举Sentinel Leader  -- 由sentinel leader去推动选举切换master
+
+            -->> Master 选举算法  --  都是由sentinel 完成
+                a. 某个slave选举成为Master
+                    priority            --高    （set in redis.conf, 数字越小优先级越高）
+                    replication Offset  --大    （谁的数据多）
+                    run id              --小    （Redis 服务器的随机标识符）
+                b. 成为master -- 选中的salve执行 ， 再salveof masterId masterPort 让别的节点成为其从节点
+                    sentinel leader 对新master执行 slaveof no one 成为master
+                    sentinel leader 对其余slave执行 slaveof no one 成为新master的salve
+                c. 如果老Master back， 会成为新Master的slave
+                    sentinel leader 降级老master，成为新的slave
+
+    4. 配置中心             客户端连接哨兵获得切换后的Redis主节点地址
+
+    哨兵节点数据多个，集群，高可用
+    哨兵节点数量奇数
+    哨兵节点配置一致
+    哨兵+主从复制，不能保证数据零丢失
+        从Master down，到新的Master选举，需要时间，对于生产有延时
+----------------------------------------------------------------------------Redis Cluster----------------------------------------------------------------------------
+
+    
+
