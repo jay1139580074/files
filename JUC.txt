@@ -1,0 +1,137 @@
+Deamon thread   --  JVM will close in only exsting daemon threads
+
+FutureTask.get()
+    if thread done, will return
+    BUT if not completed, then will blocking current main thread
+
+FutureTask.isdone()
+    will check the status 轮询, waste CPU
+
+CompletableFuture
+    if not custom a threadPool, it will set a ForkJoinPool by auto  --  旁路线程
+
+
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+---------------------------    类锁/对象锁        >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    悲观锁：Synchronized    &   Lock
+
+    任何Object 都可以成为一个锁
+        --  ObjectMonitor.class 每个Object自带一个对象监视器
+
+    Synchronized 如何获取到锁
+
+        ObjectMonitor 对象，
+            字节码  monitorenter    --加锁    monitorexit   --解锁
+
+        1. 对同一个对象，所有synchronozed 修饰的方法，只有一个线程，需要顺序执行   
+            --  one Synchronized method completed, then start another Synchronized method
+            --  normal method will not effecet, get its own thread
+
+        2. static Synchronized     --      对象锁，锁的是整个对象calss
+            --  one Synchronized method completed, then start another Synchronized method
+
+        3. static(obj) {...}            --      代码块锁，锁的是static(obj) 中的obj对象
+
+        对象锁 类锁 不一样，不会使用同一个线程，不会冲突
+    
+    >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+    ---------------------------    ReentrantLock   公平锁/非公平锁        >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+        Reentrant means a thread can acquire the same lock multiple times without causing a deadlock.
+            
+            new ReentrantLock(true) 
+                    --  Fair lock: Threads acquire the lock in the order they requested it.
+                    --  线程切换有开销
+            
+            new ReentrantLock()     
+                    --   Non-fair lock: Threads can "jump the queue" for better performance.
+                    --   效率更高，开销更小
+
+    ---------------------------    可重入锁/递归锁       >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+        Synchronized & ReentrantLock  都是可重入锁
+
+        ReentrantLock   需要每次手动lock unlock
+
+        一个线程，中有多个流程，这些流程可以自动获取当前对象自己的锁
+
+    ---------------------------    死锁       >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+        how to check :
+            1. commands:
+                jps -l
+                jstack  进程号
+            2. 图形化工具  jconsol
+
+
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+---------------------------    中断机制        >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+    one thread should stop by thread itself
+>>>>>>>>>
+    how to stop a thread
+        1. 通过一个volatile变量实现
+        2. 通过AtomicBoolean
+        3. 通过Thread类自带的中断API实例方法实现 
+        
+>>>>>>>>>
+    public void interrupt()	
+        set interrupted = true
+
+        如果线程处于正常活动状态，那么会将该线程的中断标志设置为 true，仅此而己。 
+            被设置中断标志的线程将继续正常运行，不受影响。 
+            所以， interrupt() 并不能真正的中断线程，需要被调用的线程自己进行配合才行。
+
+        如果线程处于被阻塞状态(例如处于sleep, wait, join 等状态)，
+            在别的线程中调用当前线程对象的interrupt方法，那么线程将立即退出被阻塞状态，
+            并抛出一个InterruptedException异常。
+
+            !!!--- so in catch InterruptedException, need to interrupt() again!!!!!
+
+    public static boolean interrupted()	
+        1. return interrupted
+        2. set interrupted = false
+
+    public boolean isInterrupted()	
+        return interrupted
+
+
+---------------------------    等待唤醒        >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+    1. 使用Object中的wait()方法让线程等待，使用Object中的notify()方法唤醒线程           先wait()， 再notify()
+    2. 使用JUC包中Condition的await()方法让线程等待，使用signal()方法唤醒线程            先await(), 再signl()
+    3. LockSupport类可以阻塞当前线程以及唤醒指定被阻塞的线程                            无顺序要求
+
+---------------------------    LockSupport        >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+        创建一个Lock    以及        基本线程阻塞原语
+
+    1. 正常+无锁块要求
+    2. 之前错误的先唤醒后等待，LockSupport照样支持      unpark(thread) 以后，permit会一直存在，无论什么时候再去park
+    3. 先两次 LockSupport.park, 再不管多少次LockSupport.unPark(thread)，都会阻塞        ----------------    LockSupport和每个使用它的线程都有一个许可(permit)关联。
+
+    每个线程都有一个相关的permit，permit最多只有一个，重复调用unpark也不会积累凭证。
+
+    >>>>>>>>>>>>>>  为什么可以突破wait/notify的原有调用顺序？
+
+        因为unpark获得了一个凭证，之后再调用park方法，就可以名正言顺的凭证消费，故不会阻塞。先发放了凭证后续可以畅通无阻。
+
+    >>>>>>>>>>>>>>  为什么唤醒两次后阻塞两次，但最终结果还会阻塞线程？
+
+        因为凭证的数量最多为1，连续调用两次unpark和调用一次unpark效果一样，只会增加一个凭证；而调用两次park却需要消费两个凭证，证不够，不能放行。
+
+
+---------------------------    JMM-Java Memory Model        >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+本质是一种协议，规定了 线程和主内存的交互协议
+    
+    1. 各个线程对数据的操作    --      各个线程的工作内存      --          最终才会写到主内存
+    2. 各个工作内存相互不能访问
+    3. 所有共享变量都在主内存中
+
+
+---------------------------    CAS        >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    getAndAdd       voletile 确保可见性
+                    自旋 compareAndSawp  确保更新

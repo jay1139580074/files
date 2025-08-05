@@ -246,7 +246,8 @@ better: scan 0 match k* count 10
         多个奇数个Master node，同时获取锁， 只有大多数node都获取到了（ N/2 +1 ）且锁使用时间<锁失效时间，才算成功获取锁
             N = count(node) = 2X+1
 
-    7. Redisson
+    7. Redisson     --      is a reentrantlock
+
         RLock lock = redisson.getLock(lockName);
 
         lock.lock()
@@ -259,4 +260,6 @@ better: scan 0 match k* count 10
             默认30s， 每30s/3=10s 查一次
 
         MultiLock 多重锁    --      多机案例
+
+        MultiLock lock = redisClient
         
