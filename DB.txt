@@ -1,0 +1,43 @@
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
+
+    Spring Isolation Level	    Description
+
+    Isolation.DEFAULT	        Uses the default isolation level of your DB
+    Isolation.READ_UNCOMMITTED	Allows dirty reads
+    Isolation.READ_COMMITTED	Prevents dirty reads
+    Isolation.REPEATABLE_READ	Prevents non-repeatable reads
+    Isolation.SERIALIZABLE	    Full isolation, most restrictive
+
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+    In yml
+    spring.jpa.properties.hibernate.connection.isolation=2
+
+    1 = READ_UNCOMMITTED
+
+    2 = READ_COMMITTED
+
+    4 = REPEATABLE_READ
+
+    8 = SERIALIZABLE
+
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+@Transactional(rollbackFor = Exception.class)
+
+
+属性名	        说明
+rollbackFor	        指定哪些异常触发回滚（类或数组）
+noRollbackFor	指定哪些异常不触发回滚
+propagation	    事务传播行为（如 REQUIRED、REQUIRES_NEW）
+isolation	    事务隔离级别
+timeout	        超时时间（秒）
+
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+隔离级别	           脏读 (Dirty Read)	不可重复读 (Non-repeatable Read)	幻读 (Phantom Read)	        描述
+Read Uncommitted	✅ 可能发生	            ✅ 可能发生	                    ✅ 可能发生	            最低隔离级别，允许读取未提交的数据，提高性能但风险高
+Read Committed	    ❌ 不会发生	            ✅ 可能发生	                    ✅ 可能发生	            默认级别（如 Oracle），只读取已提交数据
+Repeatable Read	    ❌ 不会发生	            ❌ 不会发生	                    ✅ 可能发生	            MySQL 默认级别，保证读取一致，但仍可能出现幻读
+Serializable	    ❌ 不会发生	            ❌ 不会发生	                    ❌ 不会发生	            最高隔离级别，完全串行化事务，性能开销最大

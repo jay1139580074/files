@@ -1,0 +1,79 @@
+---------------------------    Spring bean        >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+life cycle:
+   Instantiation → Dependency Injection → Pre-initialization → Initialization → Post-initialization → Usage → Destruction
+   实例化 → 属性赋值 → 初始化前处理 → 初始化 → 初始化后处理 → 使用 → 销毁
+
+
+   Spring中的bean的作用域有哪些？
+      singleton：唯一bean实例，Spring中的bean默认都是单例的。
+      prototype：每次请求都会创建一个新的bean实例。
+      request：每一次HTTP请求都会产生一个新的bean，该bean仅在当前HTTP request内有效。
+      session：每一次HTTP请求都会产生一个新的bean，该bean仅在当前HTTP session内有效。
+      global-session：全局session作用域，仅仅在基于Portlet的Web应用中才有意义，Spring5中已经没有了。
+      Portlet是能够生成语义代码（例如HTML）片段的小型Java Web插件。它们基于Portlet容器，可以像Servlet一样处理HTTP请求。但是与Servlet不同，每个Portlet都有不同的会话
+
+
+---------------------------    SpringMVC        >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+            DispatcherServlet	    前端控制器，统一接收请求并协调其他组件处理
+            HandlerMapping	        根据请求 URL 查找对应的处理器（Controller）
+            HandlerAdapter	        适配处理器，调用具体的 Controller 方法
+            Controller	            业务处理器，执行逻辑并返回数据和视图名
+            ViewResolver	        将逻辑视图名解析为实际视图（如 JSP、HTML）
+            View	                最终展示数据的页面或响应内容
+
+
+ >>>>>>>>>>>>>>SpringMVC 的请求处理流程
+
+    用户发起请求：浏览器访问某个 URL。
+
+    DispatcherServlet 接收请求：作为中央控制器，它拦截所有请求。
+
+    查找处理器：通过 HandlerMapping 找到对应的 Controller。
+
+    调用处理器方法：由 HandlerAdapter 调用 Controller 的方法。
+
+    返回 ModelAndView：Controller 返回模型数据和视图名。
+
+    视图解析：ViewResolver 将视图名解析为具体页面。
+
+    渲染视图：将模型数据填充到视图中，生成最终 HTML。
+
+    响应用户：将渲染后的页面返回给浏览器。
+
+
+>>>>>>>>>>>>>>             SpringBoot        >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+   @SpringBootConfiguration：组合了@Configuration注解，实现配置文件的功能；
+   @EnableAutoConfiguration：打开自动配置的功能，也可以关闭某个自动配置的选项，如关闭数据源自动配置的功能：@SpringBootApplication(exclude={DataSourceAutoConfiguration.class})；
+   @ComponentScan：Spring组件扫描。
+
+⚙️ Spring Cloud Gateway + LoadBalancer 实现细节
+
+   1. 使用 lb:// 协议触发负载均衡   -- config in gateway service yml config
+   2. Gateway 自动集成 LoadBalancerClient
+      Spring Cloud Gateway 会使用 ReactiveLoadBalancerClientFilter 来处理 lb:// 的 URI。
+
+   3. LoadBalancer 的核心接口
+      public interface ReactorServiceInstanceLoadBalancer {
+         Mono<Response<ServiceInstance>> choose(Request request);       default: RoundRobinLoadBalancer
+      }
+
+   4. 服务实例来源：服务发现组件
+         Gateway 会通过 ServiceInstanceListSupplier 获取服务实例列表：
+
+            如果你用的是 Eureka，它会从 Eureka Server 拉取注册的实例
+
+            如果你用的是 Nacos，它会从 Nacos Server 获取服务列表
+
+         这些实例会被封装成 ServiceInstance 对象，供 LoadBalancer 使用
+
+   
+      步骤	         说明
+
+      服务注册	      服务实例注册到 Eureka/Nacos
+      Gateway 路由	使用 lb://service-name
+      实例发现    	Gateway 查询注册中心获取实例列表
+      负载均衡	      LoadBalancer 选择一个实例
+      请求转发    	Gateway 将请求发送到选中实例

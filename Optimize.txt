@@ -1,0 +1,85 @@
+沟通直接，突出重点
+
+SQL
+
+微服务
+
+多线程
+
+并发
+
+架构设计
+
+链路追踪
+
+事务隔离机制
+Stream
+
+Gateway LoadBalancer, round robin
+
+JWT --  token   --  in Gateway service, will check the token, valid then call other related 
+
+改造项目
+    1. 分布式
+
+        ex. scenario creation
+                1. UI create init data, then call MD
+                2. MD update data, as producer, send 
+
+
+            ✅ 本地事务	        每个服务内部使用数据库事务（如 @Transactional）
+            ✅ Kafka 事件驱动	服务间通过事件触发操作
+            ✅ 补偿机制	        每个服务实现对应的回滚逻辑
+            ✅ 幂等性	        所有操作必须幂等，避免重复执行造成副作用
+
+                    consumer:
+                        1. redis setnx  --  see if new
+                        2. DB index
+                        3. 业务唯一标识符   --  业务ID 判断
+
+
+            分布式ID    snowflake-- 时钟回拨    --   butterfly-- 设置逻辑时间
+            spring security -- TOKEN JWT
+            微服务注册中心
+            LoadBalancer
+            链路追踪
+                Zipkin
+                    track ID   & parent ID
+
+
+        分布式事务      跨多个服务，订单，库存，支付  多个数据库    --  但是同一个事务中完成
+            ？？？ Rollover DS???       Kafka  消息一致
+                                            唯一ID， UI details status、 MD details status/   abinitio status
+                改造一下， UI -- MD -- Abinitio
+                    UI  db
+                    MD  db
+
+                1. UI add init record
+                2. UI call MD, MD init record
+                3. all success, then call Ab
+                4. Ab as a producer, once success, will put message in Kafka
+                5. UI and MD as consumer(different consumer group), once get the message, then update the their own DB records as ready, MD mail to user MD data is ready
+                6. UI and MD all updated success, then mail to user
+                6. after time threadhod, will update the status as Failed, mail to user
+
+
+            wechat app 
+                user 余额   --   from user service / user db
+                小商品      --   from goods service / goods db
+
+                    订单服务发起下单请求
+
+                        订单服务开启 Kafka 事务
+
+                        订单服务调用用户服务扣款（本地事务）
+
+                        订单服务调用商品服务扣库存（本地事务）
+
+                        如果两步都成功，则发送 Kafka 消息（如“订单已创建”）并提交事务
+
+                        如果任一步失败，则回滚 Kafka 事务，消息不会被发送
+
+                        消费者（如库存服务、用户服务）只消费已提交的事务消息
+            
+
+            

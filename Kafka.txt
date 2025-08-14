@@ -65,7 +65,30 @@ Kafka 分配节点 replicas（leader, follower）
         If no key is provided: Kafka uses a round-robin approach to distribute messages evenly across all available partitions for the topic. 
         This ensures load balancing across partitions.
 
-    所以涉及到数据异步发送，同步发送
+    所以涉及到数据
+    
+    异步发送
+        异步发送是 Kafka Producer 默认的发送方式。消息发送后不会阻塞主线程，而是通过回调函数处理结果。
+
+            ✅ 优点：
+            高性能：主线程不等待响应，适合高吞吐量场景。
+            非阻塞：可以并发发送大量消息。
+            灵活处理：通过回调函数处理成功或失败逻辑。
+
+            ⚠️ 缺点：
+            处理复杂：需要编写回调函数处理异常。
+            不确定性：发送失败可能不会立即被发现。
+    
+    同步发送
+        同步发送是通过调用 .get() 方法等待 Kafka 的响应，直到消息被确认发送或抛出异常。
+
+            ✅ 优点：
+            可靠性高：可以明确知道消息是否成功发送。
+            适合关键业务：如金融交易、日志记录等对消息可靠性要求高的场景。
+
+            ⚠️ 缺点：
+            性能较低：每次发送都阻塞主线程，影响吞吐量。
+            线程等待：可能导致线程阻塞，影响系统响应速度。
 
     Kafka 应答级别 ACKS
     0                       不需要应答
@@ -157,3 +180,13 @@ Consumner Group:
     c. 内存满了批量写入log文件末尾
 
     追加数据很快,内存数据满了批量直接写入文件末尾，很快，无需查找， 定位，性能高
+
+
+
+技术优化点	Kafka 实现方式	        性能提升点
+
+磁盘写入	顺序追加写入	        减少寻址时间
+网络传输	零拷贝 sendfile	        降低 CPU 和内存开销
+消息发送	批处理 + 压缩	        减少网络请求和数据量
+数据读取	Page Cache 命中	        减少磁盘访问
+并行处理	多 Partition + 多线程	提升吞吐量

@@ -14,6 +14,14 @@ CompletableFuture
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 ---------------------------    类锁/对象锁        >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+        初始为 无锁。
+        第一个线程访问时，进入 偏向锁。
+        如果有其他线程竞争，撤销偏向锁，升级为 轻量级锁。
+        如果 CAS 失败或竞争激烈，升级为 重量级锁。
+
+        JVM 会根据运行时的实际情况自动调整锁状态，以达到最优性能。
+
+
     悲观锁：Synchronized    &   Lock
 
     任何Object 都可以成为一个锁
@@ -31,7 +39,7 @@ CompletableFuture
         2. static Synchronized     --      对象锁，锁的是整个对象calss
             --  one Synchronized method completed, then start another Synchronized method
 
-        3. static(obj) {...}            --      代码块锁，锁的是static(obj) 中的obj对象
+        3. static {...}            --      代码块锁，锁的是static(obj) 中的obj对象
 
         对象锁 类锁 不一样，不会使用同一个线程，不会冲突
     
@@ -135,3 +143,76 @@ CompletableFuture
 ---------------------------    CAS        >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
     getAndAdd       voletile 确保可见性
                     自旋 compareAndSawp  确保更新
+
+    UNSAFE class    weakCompareAndSetInt（object, offset, expect, newVal）
+    Unsafe相当于一个后门，基于该类可以直接操作特定内存的数据
+
+    ABA 问题
+        AtomicStampedReference
+        AtomicMarkableReference
+
+    循环长，开销大
+
+
+---------------------------    ThreadLocal        >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+    ● ThreadLocal并不解决线程间共享数据的问题
+    ● ThreadLocal适用于变量在线程间隔离且在方法间共享的场景
+    ● ThreadLocal通过隐式的在不同线程内创建独立实例副本避免了实例线程安全的问题
+    ● 每个线程持有一个只属于它自己的专属map并维护了ThreadLocal对象与具体实例的映射，该Map由于只被持有他的线程访问，故不存在线程安全以及锁的问题
+    ● ThreadLocalMap的Entry对ThreadLocal的引用为弱引用。避免了ThreadLocal对象无法被回收的问题
+
+
+    内存泄漏：
+        key 是弱引用：ThreadLocalMap 中的 key 是 ThreadLocal 的弱引用 (WeakReference<ThreadLocal<?>>)。
+             这意味着，如果 ThreadLocal 实例不再被任何强引用指向，垃圾回收器会在下次 GC 时回收该实例，导致 ThreadLocalMap 中对应的 key 变为 null。
+
+             why:       static class Entry extends WeakReference<ThreadLocal<?>> {
+                            Object value;
+                        }
+            
+        value 是强引用：即使 key 被 GC 回收，value 仍然被 ThreadLocalMap.Entry 强引用存在，无法被 GC 回收。 
+
+            why: value set manually
+
+ 
+
+        需要手动.remove()
+
+
+    ● 都会通过expungeStaleEntry，cleanSomeSlots，replaceStaleEntry这三个方法回收键为null的Entry对象的值（即为具体实例）以及entry对象本身从而防止内存泄漏，属于安全加固的方法
+
+---------------------------    AQS        >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+    尝试获取资源：tryAcquire(arg)
+        子类实现该方法，尝试获取锁。
+        如果成功，线程直接进入临界区。
+        如果失败，进入等待队列。
+
+    入队：addWaiter(Node.EXCLUSIVE)
+        将当前线程封装成一个 Node，加入到 CLH 队列尾部。
+        使用 CAS 保证入队的原子性。
+
+    自旋等待：acquireQueued(node, arg)
+        当前线程在队列中自旋等待。
+        如果前驱节点是头节点且资源可用，则尝试获取。
+        否则调用 LockSupport.park() 挂起线程
+
+    唤醒机制
+        当持有锁的线程释放资源时，会唤醒队列中的下一个等待线程
+        唤醒后线程重新尝试获取资源
+
+
+AQS 是 Java 并发包中用于构建锁和同步器的基础框架。
+    它通过一个 volatile int state 变量表示同步状态，    --CAS 保证原子性
+        并使用一个 FIFO 的 CLH 队列管理线程的排队等待。
+    每个线程在获取资源失败时，会被封装成一个 Node 加入队列，进入阻塞状态，直到被唤醒。
+
+子类通过实现 tryAcquire 和 tryRelease 等模板方法，定义具体的同步逻辑。
+
+AQS 支持独占和共享两种模式，适用于不同类型的同步器，如 ReentrantLock、Semaphore、CountDownLatch 等。
+
+        独占模式	同一时刻只有一个线程持有资源	ReentrantLock
+        共享模式	多个线程可以同时访问资源	    Semaphore, CountDownLatch, ReadWriteLock
+
+此外，AQS 还提供了 ConditionObject，用于实现更灵活的等待/通知机制。整体设计遵循模板方法模式，结构清晰，扩展性强。
