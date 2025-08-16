@@ -193,6 +193,10 @@ better: scan 0 match k* count 10
                     cache 无    --  再去数据库
 
     空对象缓存      --          治标不治本
+        1. 进入，cache无，DB无，设置Nah空值到cache
+        2. 其他进入，查到cache Nah，不会到DB继续查询
+        3. 设置过期时间 --  短！
+
         约定默认空值， 比如 字符串： Nah, 并存入redis  --  设置过期时间 短
 
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -248,6 +252,19 @@ better: scan 0 match k* count 10
 
     7. Redisson     --      is a reentrantlock
 
+        hset lockKey 业务id 重入次数    set 哈希
+
+        RLock lock = redissonClient.getLock("myLock");
+        boolean acquired = lock.tryLock(10, 30, TimeUnit.SECONDS);
+        if (acquired) {
+            try {
+                // 执行业务逻辑
+            } finally {
+                lock.unlock();
+            }
+        }
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
         RLock lock = redisson.getLock(lockName);
 
         lock.lock()
@@ -255,6 +272,7 @@ better: scan 0 match k* count 10
         if(lock.isLocked() & lock.isHeldByCurrentThread){
             lock.unLock();
         }
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
         watchdog       --   分布式锁自动续期    Lua脚本实现  +  递归
             默认30s， 每30s/3=10s 查一次
@@ -278,13 +296,14 @@ redis三种删除策略
     所有键中    筛选
 
 4个方面：
-    LRU 
+    LRU（Least Recently Used） 
         最近最少使用页面置换算法，淘汰最长时间未被使用的页面，看页面最后一次被使用到发生调度的时间长短，
             首先淘汰最长时间未被使用的页面。
-    LFU 
+    LFU（Least Frequently Used） 
         最近最不常用页面置换算法，淘汰一定时期内被访问次数最少的页面，看一定时间段内页面被使用的频率，
             淘汰一定时期内被访问次数最少的页
     random 
+
     ttl
 
 2 X 4 = 8个选项

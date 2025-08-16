@@ -37,7 +37,7 @@ docker run -p 3306:3306 --name mysql --restart=always --privileged=true \
 
 
 zookeeper with Kafka  选举模式
-First Broker to zookeeper, will be the master, Broker wiill get its own ID, set in the properties
+First Broker to zookeeper, will be the master, Broker will get its own ID, set in the properties
 The rest of the Brokers will listen to the /Controller in zookeeper, incase of the master is down
 
 1. install Broker nodes
@@ -96,12 +96,36 @@ Kafka 分配节点 replicas（leader, follower）
     -1(all)                 需要Broker(leader)应答, 以及所有InSyncR Broker（follower）的应答
 
     Retry （Producer未收到ACK，所以会重试）  数据重试机制 可能导致数据重复， 导致数据的乱序
+        ✅ 1. retries（默认值：Integer.MAX_VALUE）
+        表示最多重试多少次。
+
+        如果设置为 Integer.MAX_VALUE（或非常大），理论上会无限重试，直到成功或遇到不可重试的错误。
+
+        ✅ 2. delivery.timeout.ms（默认：120000 毫秒）
+        表示消息在发送队列中最多等待多久（包括重试时间）。
+
+        一旦超过这个时间，消息会被标记为失败，触发 Callback 中的异常。
+
+        ✅ 3. retry.backoff.ms（默认：100 毫秒）
+        每次重试之间的等待时间。
        
-        --使用幂等性 （ID IMPORTANCE = true） 打开配置 -- 只能对同一个分区起作用，使用（ProducerID + data） 顺序号 作为表示实现   
+        >>>>>>>使用幂等性 （ID IMPORTANCE = true） 打开配置 -- 只能对同一个分区起作用，使用（ProducerID + data sequenceID 作为表示实现 ）
             要求:    1. ACKS = -1
                     2. 开启Retry
                     3. 在途缓冲区Batch = 5
-            ProducerID 不变，幂等性不失效--通过事务实现  TRANCACTION_ID_CONFIG set ID manually,使用事务，保持ProducerId始终一致
+
+            broker:     开启之后，broker会记录producer stage，save 5 messages(producerId + data sequenceID)     --  在途请求缓冲区 size=5
+                重复： 新的message进来，会进行对比，so will know if the message is duplicated or not!!
+
+                顺序：通过sequenceId，判断必须顺序的才能放入，保证不乱序
+
+            >>>>开启事务        TRANCACTION_ID_CONFIG  set trancation ID       保证多个partition
+
+                Kafka 会根据  事务 ID 将 producer 绑定到一个事务协调器（Transaction Coordinator）
+                每条消息都有一个 sequence number，Kafka broker 会检查是否重复。
+                事务 ID 关联所有 partition 的写入
+
+                ProducerID + Trancation ID 不变，幂等性不失效--通过事务实现  TRANCACTION_ID_CONFIG set ID manually,使用事务，保持ProducerId始终一致
 
 数据存储：
     saved into log file -- can be configured   file name is realted to starting offset
@@ -133,11 +157,12 @@ Consumer：
     事务隔离级别： ISOLATION_LEVEL_CONFIG  read_uncommitted -- default  means 有数据就能读取
 
 Consumner Group:
-    Fist consumer added into groupr, is the Leader
+    Fist consumer added into group, is the Leader
 
-    expecting: topic partition count == consumer number  so each consumer will consume realted partition
+    expecting: 
+        topic partition count == consumer number  -- so each consumer will consume realted partition
 
-    One partition can be consumed by ONE consumer only!!
+    One partition is consumed by ONE consumer only!!
 
     Group ID --  means the Consumer group's ids
 
