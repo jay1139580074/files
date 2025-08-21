@@ -82,4 +82,25 @@ JWT --  token   --  in Gateway service, will check the token, valid then call ot
                         消费者（如库存服务、用户服务）只消费已提交的事务消息
             
 
-            
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>   config mgmt
+    EMAIL_TEMPLATE_CONFIG
+        CLOB 字段
+            1. springboot 设置 json size
+            2. apply upload txt file to the back-end    --  mid-table, return mid-table-ID
+            3. when all good, will remove the mid-table
+
+
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>   Redisson
+    在分布式系统中 
+        控制多个节点对共享资源的访问，              HY cache！！！
+        确保在高并发环境下数据的一致性和操作的原子性
+
+        可重入 
+        watchdog    可续命
+
+            UI / RWA / MD
+                ↓
+            尝试获取分布式锁（Redisson）
+                ↓
+            成功 → 修改 HY cache → 释放锁           RReadWriteLock
+            失败 → 等待或重试
