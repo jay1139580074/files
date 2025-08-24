@@ -2,7 +2,7 @@
 
 life cycle:
    Instantiation → Dependency Injection → Pre-initialization → Initialization → Post-initialization → Usage → Destruction
-   实例化 → 属性赋值 → 初始化前处理 → 初始化 → 初始化后处理 → 使用 → 销毁
+   实例化 → 属性赋值/依赖注入 → 初始化前处理 → 初始化 → 初始化后处理 → 使用 → 销毁
 
 
    Spring中的bean的作用域有哪些？
@@ -13,15 +13,20 @@ life cycle:
       global-session：全局session作用域，仅仅在基于Portlet的Web应用中才有意义，Spring5中已经没有了。
       Portlet是能够生成语义代码（例如HTML）片段的小型Java Web插件。它们基于Portlet容器，可以像Servlet一样处理HTTP请求。但是与Servlet不同，每个Portlet都有不同的会话
 
-
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ---------------------------    SpringMVC        >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-            DispatcherServlet	    前端控制器，统一接收请求并协调其他组件处理
+            DispatcherServlet	     前端控制器，统一接收请求并协调其他组件处理
+               ↓
             HandlerMapping	        根据请求 URL 查找对应的处理器（Controller）
+               ↓
             HandlerAdapter	        适配处理器，调用具体的 Controller 方法
-            Controller	            业务处理器，执行逻辑并返回数据和视图名
+               ↓
+            Controller	           业务处理器，执行逻辑并返回数据和视图名
+               ↓
             ViewResolver	        将逻辑视图名解析为实际视图（如 JSP、HTML）
-            View	                最终展示数据的页面或响应内容
+               ↓
+            View	                 最终展示数据的页面或响应内容
 
 
  >>>>>>>>>>>>>>SpringMVC 的请求处理流程
@@ -42,12 +47,64 @@ life cycle:
 
     响应用户：将渲染后的页面返回给浏览器。
 
-
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 >>>>>>>>>>>>>>             SpringBoot        >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-   @SpringBootConfiguration：组合了@Configuration注解，实现配置文件的功能；
-   @EnableAutoConfiguration：打开自动配置的功能，也可以关闭某个自动配置的选项，如关闭数据源自动配置的功能：@SpringBootApplication(exclude={DataSourceAutoConfiguration.class})；
-   @ComponentScan：Spring组件扫描。
+   Springboot的自动配置原理？
+
+      @SpringBootApplication
+         ├── @EnableAutoConfiguration
+         │       ├── @Import(AutoConfigurationImportSelector)
+         │       │       ├── 读取 spring.factories / .imports(3.0    --拿到所有声明的自动配置类列表
+         │       │       ├── 加载所有自动配置类
+         │       │       ├── 按 @Conditional 条件过滤
+         │       │       └── 注册符合条件的 Bean
+         ├── @ComponentScan 扫描项目组件
+         └── @SpringBootConfiguration  本质是 @Configuration，表示这是一个配置类
+
+                              @EnableAutoConfiguration
+                                    ↓
+                              @Import(AutoConfigurationImportSelector)
+                                    ↓
+                              读取 spring.factories / .imports → 得到所有候选配置类
+                                    ↓
+                              逐个匹配 @Conditional... 条件
+                                    ↓
+                              符合条件的 @Configuration 类注册到容器
+                                    ↓
+                              Bean 定义加载 & 实例化
+
+
+Spring Boot 自动配置 = 启动类注解触发 → 读取配置文件中的自动配置类 → 条件匹配 → 注册 Bean。 
+      它的核心是 @EnableAutoConfiguration + 条件注解 + SpringFactoriesLoader。
+
+
+                                       ┌──────────────────────────────────────────────┐
+                                       │ @SpringBootApplication                        │
+                                       │   ├─ @EnableAutoConfiguration                 │
+                                       │   │     ├─ @Import(AutoConfigurationImportSelector)
+                                       │   │     │     ├─ 读取 META-INF/spring.factories 或 .imports
+                                       │   │     │     ├─ 获取所有 xxxAutoConfiguration 类
+                                       │   │     │     ├─ 按 @Conditional 条件过滤
+                                       │   │     │     └─ 返回符合条件的配置类
+                                       │   ├─ @ComponentScan                            │
+                                       │   │     └─ 扫描启动类所在包及子包的组件          │
+                                       └──────────────────────────────────────────────┘
+                                                      │
+                                                      ▼
+                                       ┌──────────────────────────────────────────────┐
+                                       │ Spring 容器加载自动配置类                      │
+                                       │   ├─ @ConditionalOnClass / OnMissingBean 等条件判断
+                                       │   ├─ 创建并注册 Bean 到 IOC 容器
+                                       │   └─ 用户自定义 Bean 会覆盖默认配置
+                                       └──────────────────────────────────────────────┘
+                                                      │
+                                                      ▼
+                                             应用启动完成，自动配置生效
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 ⚙️ Spring Cloud Gateway + LoadBalancer 实现细节
 

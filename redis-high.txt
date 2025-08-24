@@ -247,34 +247,55 @@ better: scan 0 match k* count 10
     5. 分布式锁自动续期
         Lua脚本实现 原子性 --  注意僵尸线程
 
-    6. RedLock
+    6. RedLock          --      分布式中 一锁多建多用
         Redis Master 开启了锁，更新数据，节点挂了，还没来得及复制到salve    --  主从复制异步的
+        slave 升级为Master，又会建同一个锁
             会造成一锁被多建立多用
 
-        多个奇数个Master node，同时获取锁， 只有大多数node都获取到了（ N/2 +1 ）且锁使用时间<锁失效时间，才算成功获取锁
-            N = count(node) = 2X+1
+        算法原理：
+            a. N个奇数个Master node，（推荐5个）同时获取锁， 只有大多数node都获取到了（ N/2 +1 ）且锁使用时间<锁失效时间，才算成功获取锁
+                N = count(node) = 2X+1
+            b. 设置过期时间（TTL）确保锁最终会自动释放。
 
-    7. Redisson     --      is a reentrantlock
+    7. RedissonClient    --      is a client
 
-        hset lockKey 业务id 重入次数    set 哈希
+        原子加锁：SET NX PX 一步完成，避免非原子问题
+        唯一标识：unique_id 防止误删他人锁
+        看门狗续期：防止业务执行时间过长导致锁提前过期
+        Lua 原子释放：先校验 value，再删除
+        锁释放后：其他客户端才能成功加锁
 
-        RLock lock = redissonClient.getLock("myLock");
-        boolean acquired = lock.tryLock(10, 30, TimeUnit.SECONDS);
-        if (acquired) {
-            try {
-                // 执行业务逻辑
-            } finally {
-                lock.unlock();
+        防止一所多间多用：
+            原子加锁 + 唯一标识 + 自动续期（看门狗机制）+ 原子释放
+
+        可重入：
+            hset lockKey 业务id 重入次数    set 哈希
+
+            RLock lock = redissonClient.getLock("myLock");
+            boolean acquired = lock.tryLock(10, 30, TimeUnit.SECONDS);
+            if (acquired) {
+                try {
+                    // 执行业务逻辑
+                } finally {
+                    lock.unlock();
+                }
             }
-        }
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-        RLock lock = redisson.getLock(lockName);
+        RLock lock = redissonClient.getLock("myLock");
 
-        lock.lock()
-
-        if(lock.isLocked() & lock.isHeldByCurrentThread){
-            lock.unLock();
+        // 第一次加锁
+        lock.lock();
+        try {
+            // 同一线程再次加锁（可重入，不会阻塞）
+            lock.lock();
+            try {
+                // 业务逻辑
+            } finally {
+                lock.unlock(); // 释放一次
+            }
+        } finally {
+            lock.unlock(); // 释放第二次，真正释放锁
         }
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
@@ -284,6 +305,22 @@ better: scan 0 match k* count 10
         MultiLock 多重锁    --      多机案例
 
         MultiLock lock = redisClient
+
+
+        Redisson 常用锁类型表
+        ====================
+
+        锁方法名称                         | 锁类型名称                 | 特点与适用场景
+        -----------------------------------|---------------------------|--------------------------------------------
+        getLock(String name)               | 可重入锁（Reentrant Lock） | 默认锁类型，同一线程可多次加锁，计数释放
+        getFairLock(String name)           | 公平锁（Fair Lock）        | 按请求顺序获取锁，避免“插队”，适合公平性要求高的业务
+        getReadWriteLock(String name)      | 读写锁（ReadWrite Lock）   | 多读共享，写独占，适合读多写少的场景
+        getMultiLock(RLock... locks)       | 联锁（MultiLock）          | 多把锁绑定成一把锁，必须全部加锁成功才算成功
+        getRedLock(RLock... locks)         | RedLock                   | Redis 官方分布式锁算法实现，基于多数派原则，容错性高
+        getSemaphore(String name)          | 信号量（Semaphore）        | 控制同时访问某资源的线程数，适合限流
+        getPermitExpirableSemaphore(String name) | 可过期信号量         | 获取的许可有过期时间，适合需要自动释放的限流场景
+        getCountDownLatch(String name)     | 闭锁（CountDownLatch）     | 等待计数归零后才继续执行，适合任务协调
+
 
 --------------------------- --------------------------- --------------------------- --------------------------- 
 ---------------------------    过期淘汰策略        >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
