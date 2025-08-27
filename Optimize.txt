@@ -1,18 +1,7 @@
-沟通直接，突出重点
-
-SQL
-
-微服务
-
-多线程
-
-并发
-
 架构设计
 
 链路追踪
 
-事务隔离机制
 Stream
 
 Gateway LoadBalancer, round robin
