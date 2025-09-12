@@ -176,7 +176,7 @@ better: scan 0 match k* count 10
         >>>>>>>>双检加锁策略    
         1. 查询方法加上一个互斥锁   --  防止大量访问数据库
             a. 第一个线程查cache，有直接返回
-            b. cache不存在，加互斥锁，再查一遍cache
+            b. cache不存在，查询方法加互斥锁，再查一遍cache
             c. cache确实没有，再去数据库
             d. 拿到数据库数据，写到cache，再返回
 

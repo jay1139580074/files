@@ -107,14 +107,20 @@ Spring Boot 自动配置 = 启动类注解触发 → 读取配置文件中的自
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 ⚙️ Spring Cloud Gateway + LoadBalancer 实现细节
+      Spring Cloud Gateway 使用一个核心组件叫做：
 
-   1. 使用 lb:// 协议触发负载均衡   -- config in gateway service yml config
-   2. Gateway 自动集成 LoadBalancerClient
-      Spring Cloud Gateway 会使用 ReactiveLoadBalancerClientFilter 来处理 lb:// 的 URI。
+         ReactiveLoadBalancerClientFilter
+         它是一个全局过滤器（GlobalFilter），在请求进入网关时拦截并处理。
 
-   3. LoadBalancer 的核心接口
+         当你在路由配置中使用 lb://service-id 作为目标 URI，它会触发负载均衡逻辑。
+
+         它会根据 service-id 从注册中心（如 Eureka、Consul）获取所有可用实例。
+
+         然后通过对应的 ReactorLoadBalancer 策略选择一个实例进行转发。
+
+   LoadBalancer 的核心接口：
       public interface ReactorServiceInstanceLoadBalancer {
-         Mono<Response<ServiceInstance>> choose(Request request);       default: RoundRobinLoadBalancer
+         Mono<Response<ServiceInstance>> choose(Request request);       default: RoundRobinLoadBalancer。RandomLoadBalancer， WeightedResponseTimeRule
       }
 
    4. 服务实例来源：服务发现组件
@@ -134,3 +140,14 @@ Spring Boot 自动配置 = 启动类注解触发 → 读取配置文件中的自
       实例发现    	Gateway 查询注册中心获取实例列表
       负载均衡	      LoadBalancer 选择一个实例
       请求转发    	Gateway 将请求发送到选中实例
+
+
+      [客户端请求]
+            ↓
+      [Nginx（边缘入口）]
+            ↓
+      [Spring Cloud Gateway（API 网关）]
+            ↓
+      [Eureka（服务注册中心）]
+            ↓
+      [微服务集群（UserService、OrderService 等）]

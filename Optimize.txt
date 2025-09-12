@@ -101,3 +101,65 @@ JWT --  token   --  in Gateway service, will check the token, valid then call ot
 
         DB-Split 
             InheritableThreadLocal
+
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>   超卖
+
+    1. Redisson + lock + 限制QPS
+
+    2. 限制QPS + lua + MQ + sentinel 
+        lua: 检查库存 + 扣减库存    --原子性
+        MQ： 解耦， 异步处理 DB扣除内存
+        sentinel： qps限制
+        线程池： 限制最大线程数 也可以限流
+
+    3. set + spop + MQ 
+        SPOP 用于从集合（Set 类型）中随机移除并返回一个或多个元素。 --  SPOP key [count]        --直接原子性的扣除库存
+        MQ： 解耦， 异步处理 DB扣除内存
+        sentinel： qps限制
+        线程池： 限制最大线程数 也可以限流
+
+
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>   QPS
+【Redis QPS 限制方法总结】
+
+一、QPS 概念
+QPS（Queries Per Second）表示系统每秒处理的请求数量，是衡量系统性能的重要指标。
+
+二、常见限流算法
+1. 令牌桶算法：固定速率生成令牌，请求需获取令牌才能通过，适合平滑限流。
+2. 漏桶算法：请求进入漏桶，按固定速率流出，超出速率的请求被丢弃。
+3. 固定窗口计数：每个时间窗口内计数请求数，超过阈值则拒绝。
+4. 滑动窗口计数：更精细地统计请求分布，适合高精度限流。
+
+三、技术实现方式
+1. Guava RateLimiter（Java）：
+   - 使用令牌桶算法限制请求速率。
+   - 示例：RateLimiter.create(100); // 每秒最多 100 次请求
+
+2. Spring Boot 注解 + 拦截器：
+   - 自定义注解 @QpsLimit 实现方法级别限流。
+
+3. Nginx 限流配置：
+   - 使用 limit_req_zone 和 limit_req 实现接口限流。
+   - 示例：
+     limit_req_zone $binary_remote_addr zone=req_limit:10m rate=5r/s;
+     location /api/ {
+         limit_req zone=req_limit burst=10 nodelay;
+     }
+
+4. Redis + Lua 脚本：
+   - 利用 Redis 的原子性和 Lua 脚本实现滑动窗口限流，适用于分布式系统。
+
+四、限流策略建议
+- 配合监控系统（如 Prometheus + Grafana）实时观察 QPS。
+- 设置降级处理机制，如返回缓存或提示稍后重试。
+- 根据业务高峰期动态调整限流阈值。
+
+【结束】
+
+
+---------------------   项目难点
+
+1. Kafka  幂等性。UI/MD/Abinitio        消息统一
+
+2. Redis  热点key 过期

@@ -116,6 +116,7 @@ CompletableFuture
 ---------------------------    LockSupport        >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
         创建一个Lock    以及        基本线程阻塞原语
+        AQS 修改线程状态 用的LockSupport    --  LockSupport.park(this);
 
     1. 正常+无锁块要求
     2. 之前错误的先唤醒后等待，LockSupport照样支持      unpark(thread) 以后，permit会一直存在，无论什么时候再去park
@@ -247,10 +248,17 @@ AQS 支持独占和共享两种模式，适用于不同类型的同步器，如 
             RejectedExecutionHandler handler // 拒绝策略
         )
 
-提交任务 → 核心线程是否空闲？
+提交任务（execute() 或 submit() → 核心线程是否空闲？
     ├─ 是 → 直接用核心线程执行
     └─ 否 → 放入任务队列
              ├─ 队列满？ 
              │    ├─ 否 → 等待执行
              │    └─ 是 → 创建非核心线程（直到最大线程数）
              │              └─ 仍无法执行 → 启动拒绝策略
+
+        🚫 四、拒绝策略（当任务无法处理时）
+        策略	                         行为
+        AbortPolicy	                抛出异常（默认）
+        CallerRunsPolicy	        由提交任务的线程执行
+        DiscardPolicy	            静默丢弃任务
+        DiscardOldestPolicy	        丢弃队列中最旧的任务
